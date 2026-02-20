@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router';
-import { Shield, LayoutDashboard, Upload, FileCheck, AlertCircle, FileText } from 'lucide-react';
+import { Shield, LayoutDashboard, Upload, FileCheck, AlertCircle, FileText, Table } from 'lucide-react';
 
 export function Navbar() {
   const location = useLocation();
@@ -9,7 +9,9 @@ export function Navbar() {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/upload', label: 'Upload Policy', icon: Upload },
-    { path: '/scan', label: 'Scan Data', icon: FileCheck },
+    { path: '/data-connection', label: 'Data', icon: Table },
+    { path: '/scan', label: 'Scan', icon: FileCheck },
+    { path: '/transactions', label: 'Transactions', icon: Table },
     { path: '/review', label: 'Review Queue', icon: AlertCircle },
     { path: '/reports', label: 'Reports', icon: FileText }
   ];
@@ -30,11 +32,10 @@ export function Navbar() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                      isActive(item.path)
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${isActive(item.path)
                         ? 'bg-blue-50 text-blue-700'
                         : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     <Icon className="w-4 h-4" />
                     {item.label}

@@ -1,30 +1,52 @@
-import { FileText, Download, Calendar, Shield, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, Download, Calendar, Shield, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { sampleViolations, extractedRules } from '../data/mockData';
+import { extractedRules } from '../data/mockData';
+import { api, type ComplianceSummary } from '../services/api';
 
 export function Reports() {
+  const [summary, setSummary] = useState<ComplianceSummary | null>(null);
+  const [violations, setViolations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [sum, results] = await Promise.all([
+          api.getComplianceSummary(),
+          api.listViolations()
+        ]);
+        setSummary(sum);
+        setViolations(results.violations);
+      } catch (error) {
+        console.error('Failed to load report data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
   const handleGenerateReport = () => {
-    // Simulate report generation
     alert('Report generated successfully! In a production environment, this would download a PDF.');
   };
 
   const handleExportCSV = () => {
-    // Simulate CSV export
     alert('Data exported successfully! In a production environment, this would download a CSV file.');
   };
 
-  const reportSummary = {
-    totalRules: extractedRules.length,
-    totalViolations: sampleViolations.length,
-    openViolations: sampleViolations.filter(v => v.status === 'open').length,
-    resolvedViolations: sampleViolations.filter(v => v.status === 'resolved').length,
-    falsePositives: sampleViolations.filter(v => v.status === 'false_positive').length,
-    criticalCount: sampleViolations.filter(v => v.severity === 'critical').length,
-    highCount: sampleViolations.filter(v => v.severity === 'high').length,
-    reportDate: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+
+  const reportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -81,7 +103,7 @@ export function Reports() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-2xl font-bold mb-1">Compliance Report Preview</h2>
-                <p className="text-sm text-gray-600">Generated on {reportSummary.reportDate}</p>
+                <p className="text-sm text-gray-600">Generated on {reportDate}</p>
               </div>
               <Badge className="bg-green-100 text-green-700 border-green-300">
                 <Shield className="w-4 h-4 mr-1" />
@@ -96,26 +118,26 @@ export function Reports() {
             <div className="grid md:grid-cols-4 gap-4 mb-6">
               <div className="p-4 bg-blue-50 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">Active Rules</p>
-                <p className="text-3xl font-bold text-blue-600">{reportSummary.totalRules}</p>
+                <p className="text-3xl font-bold text-blue-600">6</p>
               </div>
               <div className="p-4 bg-red-50 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">Open Violations</p>
-                <p className="text-3xl font-bold text-red-600">{reportSummary.openViolations}</p>
+                <p className="text-3xl font-bold text-red-600">{summary?.open_violations ?? 0}</p>
               </div>
               <div className="p-4 bg-green-50 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">Resolved</p>
-                <p className="text-3xl font-bold text-green-600">{reportSummary.resolvedViolations}</p>
+                <p className="text-3xl font-bold text-green-600">{summary?.resolved_violations ?? 0}</p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">False Positives</p>
-                <p className="text-3xl font-bold text-gray-600">{reportSummary.falsePositives}</p>
+                <p className="text-3xl font-bold text-gray-600">{summary?.false_positives ?? 0}</p>
               </div>
             </div>
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <p className="text-sm text-yellow-900">
-                <strong>Risk Assessment:</strong> {reportSummary.criticalCount} critical and {reportSummary.highCount} high-severity 
-                violations require immediate attention. Overall compliance rate: 98.4%.
+                <strong>Risk Assessment:</strong> {summary?.severity_breakdown.critical ?? 0} critical and {summary?.severity_breakdown.high ?? 0} high-severity
+                AML violations require immediate attention. CTR filings and SAR submissions are pending for open violations.
               </p>
             </div>
           </div>
@@ -130,9 +152,9 @@ export function Reports() {
                     <h4 className="font-semibold text-gray-900">{rule.description}</h4>
                     <Badge className={
                       rule.severity === 'critical' ? 'bg-red-100 text-red-700' :
-                      rule.severity === 'high' ? 'bg-orange-100 text-orange-700' :
-                      rule.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
+                        rule.severity === 'high' ? 'bg-orange-100 text-orange-700' :
+                          rule.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-green-100 text-green-700'
                     }>
                       {rule.severity.toUpperCase()}
                     </Badge>
@@ -148,32 +170,32 @@ export function Reports() {
           <div className="mb-8">
             <h3 className="text-xl font-semibold mb-4">Violation Details</h3>
             <div className="space-y-4">
-              {sampleViolations.map((violation) => (
+              {violations.map((violation) => (
                 <div key={violation.id} className="border rounded-lg p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <Badge className={
                           violation.severity === 'critical' ? 'bg-red-100 text-red-700' :
-                          violation.severity === 'high' ? 'bg-orange-100 text-orange-700' :
-                          violation.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-green-100 text-green-700'
+                            violation.severity === 'high' ? 'bg-orange-100 text-orange-700' :
+                              violation.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-green-100 text-green-700'
                         }>
                           {violation.severity.toUpperCase()}
                         </Badge>
                         <Badge className={
                           violation.status === 'resolved' ? 'bg-green-100 text-green-700' :
-                          violation.status === 'open' ? 'bg-red-100 text-red-700' :
-                          'bg-gray-100 text-gray-700'
+                            violation.status === 'open' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-700'
                         }>
                           {violation.status.replace('_', ' ').toUpperCase()}
                         </Badge>
                       </div>
                       <h4 className="font-semibold text-gray-900 mb-1">
-                        {violation.ruleName}
+                        {violation.rule_name}
                       </h4>
                     </div>
-                    <span className="text-sm text-gray-600">ID: {violation.recordId}</span>
+                    <span className="text-sm text-gray-600 font-mono">TXN: {violation.transaction_id}</span>
                   </div>
 
                   <div className="bg-gray-50 rounded p-3 mb-3">
@@ -193,22 +215,22 @@ export function Reports() {
                     </div>
                   </div>
 
-                  {violation.reviewerComment && (
+                  {violation.reviewer_notes && (
                     <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
                       <p className="text-sm font-medium text-blue-900 mb-1">Reviewer Decision:</p>
-                      <p className="text-sm text-blue-800">{violation.reviewerComment}</p>
+                      <p className="text-sm text-blue-800">{violation.reviewer_notes}</p>
                     </div>
                   )}
 
                   <div className="flex items-center gap-4 text-xs text-gray-500">
                     <span>
                       <Calendar className="w-3 h-3 inline mr-1" />
-                      Detected: {new Date(violation.detectedAt).toLocaleString()}
+                      Detected: {new Date(violation.detected_at).toLocaleString()}
                     </span>
-                    {violation.reviewedAt && (
+                    {violation.reviewed_at && (
                       <span>
                         <CheckCircle className="w-3 h-3 inline mr-1" />
-                        Reviewed: {new Date(violation.reviewedAt).toLocaleString()}
+                        Reviewed: {new Date(violation.reviewed_at).toLocaleString()}
                       </span>
                     )}
                   </div>

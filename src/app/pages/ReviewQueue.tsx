@@ -1,27 +1,45 @@
-import { useState } from 'react';
-import { CheckCircle, X, MessageSquare, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CheckCircle, X, MessageSquare, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { sampleViolations, extractedRules, type Violation } from '../data/mockData';
+import { extractedRules, type Violation } from '../data/mockData';
+import { api } from '../services/api';
 
 export function ReviewQueue() {
-  const [violations, setViolations] = useState<Violation[]>(sampleViolations);
-  const [selectedViolation, setSelectedViolation] = useState<Violation | null>(null);
+  const [violations, setViolations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedViolation, setSelectedViolation] = useState<any | null>(null);
   const [comment, setComment] = useState('');
 
-  const handleReview = (violationId: string, status: Violation['status'], reviewComment: string) => {
-    setViolations(prev =>
-      prev.map(v =>
-        v.id === violationId
-          ? { ...v, status, reviewerComment: reviewComment, reviewedAt: new Date().toISOString() }
-          : v
-      )
-    );
-    setSelectedViolation(null);
-    setComment('');
+  const loadViolations = async () => {
+    try {
+      setLoading(true);
+      const data = await api.listViolations();
+      setViolations(data.violations);
+    } catch (error) {
+      console.error('Failed to load violations:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadViolations();
+  }, []);
+
+  const handleReview = async (violationId: string, action: 'resolve' | 'dismiss', reviewComment: string) => {
+    try {
+      await api.submitReviewAction(violationId, action, reviewComment);
+      await loadViolations();
+      setSelectedViolation(null);
+      setComment('');
+    } catch (error) {
+      console.error('Action failed:', error);
+      alert('Failed to submit review action.');
+    }
   };
 
   const severityColors = {
@@ -47,7 +65,7 @@ export function ReviewQueue() {
   const resolvedViolations = violations.filter(v => v.status === 'resolved');
   const falsePositives = violations.filter(v => v.status === 'false_positive');
 
-  const ViolationList = ({ items, showActions = true }: { items: Violation[], showActions?: boolean }) => (
+  const ViolationList = ({ items, showActions = true }: { items: any[], showActions?: boolean }) => (
     <div className="space-y-3">
       {items.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
@@ -56,25 +74,24 @@ export function ReviewQueue() {
         </div>
       ) : (
         items.map((violation) => {
-          const rule = getRuleById(violation.ruleId);
           return (
             <Card key={violation.id} className="p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge className={severityColors[violation.severity]}>
+                    <Badge className={(severityColors as any)[violation.severity]}>
                       {violation.severity.toUpperCase()}
                     </Badge>
-                    <Badge className={statusColors[violation.status]}>
+                    <Badge className={(statusColors as any)[violation.status]}>
                       {violation.status.replace('_', ' ').toUpperCase()}
                     </Badge>
-                    <span className="text-sm text-gray-600">Record: {violation.recordId}</span>
                   </div>
-                  <h4 className="font-semibold text-gray-900 mb-1">{violation.ruleName}</h4>
+                  <h4 className="font-semibold text-gray-900 mb-1">{violation.rule_name}</h4>
                 </div>
               </div>
 
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                <p className="text-sm text-gray-600 mb-1 font-mono text-xs">TXN: {violation.transaction_id}</p>
                 <p className="text-sm text-gray-900">{violation.explanation}</p>
               </div>
 
@@ -90,13 +107,13 @@ export function ReviewQueue() {
                 </div>
               </div>
 
-              {violation.reviewerComment && (
+              {violation.reviewer_notes && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                   <div className="flex items-start gap-2">
                     <MessageSquare className="w-4 h-4 text-blue-600 mt-0.5" />
                     <div className="flex-1">
                       <p className="text-xs font-medium text-blue-900 mb-1">Reviewer Comment:</p>
-                      <p className="text-sm text-blue-800">{violation.reviewerComment}</p>
+                      <p className="text-sm text-blue-800">{violation.reviewer_notes}</p>
                     </div>
                   </div>
                 </div>
@@ -120,6 +137,14 @@ export function ReviewQueue() {
     </div>
   );
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 py-8">
@@ -130,7 +155,7 @@ export function ReviewQueue() {
           </p>
           <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-sm text-blue-900">
-              <strong>Remember:</strong> Humans decide. Review each violation carefully 
+              <strong>Remember:</strong> Humans decide. Review each violation carefully
               and add context for audit trails.
             </p>
           </div>
@@ -188,15 +213,15 @@ export function ReviewQueue() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <Card className="max-w-2xl w-full p-6">
             <h3 className="text-xl font-bold mb-4">Review Violation</h3>
-            
+
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">
-                <Badge className={severityColors[selectedViolation.severity]}>
+                <Badge className={(severityColors as any)[selectedViolation.severity]}>
                   {selectedViolation.severity.toUpperCase()}
                 </Badge>
-                <span className="text-sm text-gray-600">Record: {selectedViolation.recordId}</span>
+                <span className="text-sm text-gray-600">TXN: {selectedViolation.transaction_id}</span>
               </div>
-              <p className="font-semibold mb-2">{selectedViolation.ruleName}</p>
+              <p className="font-semibold mb-2">{selectedViolation.rule_name}</p>
               <p className="text-sm text-gray-700 bg-yellow-50 p-3 rounded">
                 {selectedViolation.explanation}
               </p>
@@ -214,14 +239,14 @@ export function ReviewQueue() {
 
             <div className="flex gap-3">
               <Button
-                onClick={() => handleReview(selectedViolation.id, 'reviewed', comment || 'Confirmed violation.')}
+                onClick={() => handleReview(selectedViolation.id, 'resolve', comment || 'Confirmed violation.')}
                 className="flex-1"
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Confirm Violation
               </Button>
               <Button
-                onClick={() => handleReview(selectedViolation.id, 'false_positive', comment || 'Marked as false positive.')}
+                onClick={() => handleReview(selectedViolation.id, 'dismiss', comment || 'Marked as false positive.')}
                 variant="outline"
                 className="flex-1"
               >

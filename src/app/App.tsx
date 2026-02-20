@@ -8,6 +8,7 @@ import { ComplianceScan } from './pages/ComplianceScan';
 import { ReviewQueue } from './pages/ReviewQueue';
 import { Dashboard } from './pages/Dashboard';
 import { Reports } from './pages/Reports';
+import { AMLTransactions } from './pages/AMLTransactions';
 
 export default function App() {
   return (
@@ -15,10 +16,10 @@ export default function App() {
       <Routes>
         {/* Login page without navbar */}
         <Route path="/login" element={<Login />} />
-        
+
         {/* Landing page without navbar */}
         <Route path="/" element={<LandingPage />} />
-        
+
         {/* App pages with navbar */}
         <Route path="/*" element={
           <div className="min-h-screen bg-gray-50">
@@ -30,6 +31,7 @@ export default function App() {
               <Route path="/scan" element={<ComplianceScan />} />
               <Route path="/review" element={<ReviewQueue />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/transactions" element={<AMLTransactions />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </div>

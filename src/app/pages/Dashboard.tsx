@@ -1,14 +1,31 @@
-import { TrendingDown, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { TrendingDown, AlertTriangle, CheckCircle, FileText, Activity, Loader2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { complianceTrendData, severityBreakdown, topViolatedRules, sampleViolations } from '../data/mockData';
+import { complianceTrendData, severityBreakdown, topViolatedRules } from '../data/mockData';
+import { api, type ComplianceSummary } from '../services/api';
 
 export function Dashboard() {
-  const openViolations = sampleViolations.filter(v => v.status === 'open').length;
-  const resolvedViolations = sampleViolations.filter(v => v.status === 'resolved').length;
-  const totalViolations = sampleViolations.length;
-  const complianceRate = Math.round(((247 - openViolations) / 247) * 100);
+  const [data, setData] = useState<ComplianceSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getComplianceSummary()
+      .then(setData)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+
+  const complianceRate = data?.compliance_rate ?? 0;
+  const openViolations = data?.open_violations ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -24,11 +41,20 @@ export function Dashboard() {
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card className="p-6">
             <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-600">Transactions Scanned</p>
+              <Activity className="w-5 h-5 text-blue-600" />
+            </div>
+            <p className="text-3xl font-bold text-gray-900">{data?.total_transactions_scanned ?? 0}</p>
+            <p className="text-xs text-gray-500 mt-1">IBM AML dataset</p>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-600">Compliance Rate</p>
               <TrendingDown className="w-5 h-5 text-green-600" />
             </div>
             <p className="text-3xl font-bold text-gray-900">{complianceRate}%</p>
-            <p className="text-xs text-green-600 mt-1">+2% from last week</p>
+            <p className="text-xs text-green-600 mt-1">Target: {'>'}95%</p>
           </Card>
 
           <Card className="p-6">
@@ -42,20 +68,11 @@ export function Dashboard() {
 
           <Card className="p-6">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-600">Resolved This Week</p>
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            </div>
-            <p className="text-3xl font-bold text-green-600">{resolvedViolations}</p>
-            <p className="text-xs text-gray-500 mt-1">93% resolution rate</p>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-600">Active Policies</p>
+              <p className="text-sm text-gray-600">Active AML Rules</p>
               <FileText className="w-5 h-5 text-blue-600" />
             </div>
             <p className="text-3xl font-bold text-gray-900">6</p>
-            <p className="text-xs text-gray-500 mt-1">Rules enforced</p>
+            <p className="text-xs text-gray-500 mt-1">System rules applied</p>
           </Card>
         </div>
 
@@ -67,12 +84,12 @@ export function Dashboard() {
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={complianceTrendData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
+                <XAxis
+                  dataKey="date"
                   tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 />
                 <YAxis />
-                <Tooltip 
+                <Tooltip
                   labelFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 />
                 <Legend />
@@ -91,7 +108,11 @@ export function Dashboard() {
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={severityBreakdown}
+                  data={data ? Object.entries(data.severity_breakdown).map(([name, value]) => ({
+                    name,
+                    value,
+                    color: name === 'critical' ? '#ef4444' : name === 'high' ? '#f97316' : name === 'medium' ? '#f59e0b' : '#10b981'
+                  })) : severityBreakdown}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
@@ -100,22 +121,14 @@ export function Dashboard() {
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {severityBreakdown.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  {(data ? Object.entries(data.severity_breakdown).map(([name]) => ({ name })) : severityBreakdown).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={(entry as any).color ?? '#94a3b8'} />
                   ))}
                 </Pie>
                 <Tooltip />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-            <div className="flex gap-3 mt-4 justify-center">
-              {severityBreakdown.map((item) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-sm text-gray-600">{item.name}</span>
-                </div>
-              ))}
-            </div>
           </Card>
         </div>
 
@@ -141,35 +154,35 @@ export function Dashboard() {
               <div className="flex items-start gap-3">
                 <div className="w-2 h-2 bg-red-500 rounded-full mt-2" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">New violation detected</p>
-                  <p className="text-xs text-gray-600">Password expiration - EMP-1001</p>
+                  <p className="text-sm font-medium text-gray-900">Critical violation detected</p>
+                  <p className="text-xs text-gray-600">TXN-015: $1.35M Bitcoin transfer confirmed laundering</p>
                   <p className="text-xs text-gray-500">2 hours ago</p>
                 </div>
               </div>
-              
+
               <div className="flex items-start gap-3">
                 <div className="w-2 h-2 bg-green-500 rounded-full mt-2" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">Violation resolved</p>
-                  <p className="text-xs text-gray-600">MFA requirement - EMP-1002</p>
+                  <p className="text-xs text-gray-600">TXN-005: Structuring — confirmed legitimate business payment</p>
                   <p className="text-xs text-gray-500">5 hours ago</p>
                 </div>
               </div>
-              
+
               <div className="flex items-start gap-3">
                 <div className="w-2 h-2 bg-blue-500 rounded-full mt-2" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">Scan completed</p>
-                  <p className="text-xs text-gray-600">Employee database - 247 records</p>
+                  <p className="text-sm font-medium text-gray-900">AML scan completed</p>
+                  <p className="text-xs text-gray-600">IBM AML dataset — {data?.total_transactions_scanned ?? 0} transactions</p>
                   <p className="text-xs text-gray-500">8 hours ago</p>
                 </div>
               </div>
-              
+
               <div className="flex items-start gap-3">
                 <div className="w-2 h-2 bg-purple-500 rounded-full mt-2" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">Policy updated</p>
-                  <p className="text-xs text-gray-600">IT Security Policy 2026</p>
+                  <p className="text-xs text-gray-600">AML Compliance Policy v2.1 — EDD threshold revised</p>
                   <p className="text-xs text-gray-500">1 day ago</p>
                 </div>
               </div>
@@ -186,8 +199,8 @@ export function Dashboard() {
                 <h3 className="font-semibold text-red-900 mb-1">Action Required</h3>
                 <p className="text-sm text-red-800 mb-3">
                   You have {openViolations} open violation{openViolations !== 1 ? 's' : ''} requiring immediate attention.
-                  {sampleViolations.filter(v => v.status === 'open' && v.severity === 'critical').length > 0 && (
-                    <span className="font-semibold"> Including {sampleViolations.filter(v => v.status === 'open' && v.severity === 'critical').length} critical issue{sampleViolations.filter(v => v.status === 'open' && v.severity === 'critical').length !== 1 ? 's' : ''}.</span>
+                  {data && data.severity_breakdown.critical > 0 && (
+                    <span className="font-semibold"> Including {data.severity_breakdown.critical} critical issue{data.severity_breakdown.critical !== 1 ? 's' : ''}.</span>
                   )}
                 </p>
                 <a href="/review" className="text-sm text-red-700 underline hover:text-red-800">

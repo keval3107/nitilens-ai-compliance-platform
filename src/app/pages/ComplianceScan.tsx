@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Play, Loader2, AlertTriangle, CheckCircle, FileText, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
-import { sampleViolations, extractedRules } from '../data/mockData';
+import { extractedRules } from '../data/mockData';
+import { api } from '../services/api';
 
 type ScanStatus = 'ready' | 'scanning' | 'complete';
 
@@ -13,25 +14,36 @@ export function ComplianceScan() {
   const navigate = useNavigate();
   const [scanStatus, setScanStatus] = useState<ScanStatus>('ready');
   const [scanProgress, setScanProgress] = useState(0);
-  const [violations, setViolations] = useState<typeof sampleViolations>([]);
+  const [violations, setViolations] = useState<any[]>([]);
 
-  const handleStartScan = () => {
+  const handleStartScan = async () => {
     setScanStatus('scanning');
-    setScanProgress(0);
-    
-    const interval = setInterval(() => {
-      setScanProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setScanStatus('complete');
-            setViolations(sampleViolations.filter(v => v.status === 'open'));
-          }, 500);
-          return 100;
-        }
-        return prev + 5;
-      });
-    }, 150);
+    setScanProgress(10);
+
+    try {
+      // Simulate progress for UI feel
+      const progressInterval = setInterval(() => {
+        setScanProgress(prev => (prev < 90 ? prev + 2 : prev));
+      }, 300);
+
+      // Trigger real backend scan
+      await api.triggerScan();
+
+      // Fetch results
+      const results = await api.listViolations('open');
+
+      clearInterval(progressInterval);
+      setScanProgress(100);
+
+      setTimeout(() => {
+        setScanStatus('complete');
+        setViolations(results.violations);
+      }, 500);
+    } catch (error) {
+      console.error('Scan failed:', error);
+      setScanStatus('ready');
+      alert('Compliance scan failed. Please ensure the backend is running at localhost:8000.');
+    }
   };
 
   const severityColors = {
@@ -63,23 +75,23 @@ export function ComplianceScan() {
               </div>
               <h2 className="text-2xl font-bold mb-4">Ready to Scan</h2>
               <p className="text-gray-600 mb-6">
-                NitiLens will check {extractedRules.length} compliance rules against your employee database.
+                NitiLens will check {extractedRules.length} AML compliance rules against the IBM AML transaction records.
                 This process typically takes 30-60 seconds.
               </p>
 
               <div className="bg-gray-50 rounded-lg p-4 mb-8">
                 <div className="grid md:grid-cols-3 gap-4 text-sm">
                   <div>
-                    <p className="text-gray-600 mb-1">Rules to Check</p>
+                    <p className="text-gray-600 mb-1">Records to Scan</p>
+                    <p className="text-2xl font-bold text-gray-900">51</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600 mb-1">AML Rules Active</p>
                     <p className="text-2xl font-bold text-gray-900">{extractedRules.length}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 mb-1">Records to Scan</p>
-                    <p className="text-2xl font-bold text-gray-900">247</p>
-                  </div>
-                  <div>
                     <p className="text-gray-600 mb-1">Estimated Time</p>
-                    <p className="text-2xl font-bold text-gray-900">~45s</p>
+                    <p className="text-2xl font-bold text-gray-900">~20s</p>
                   </div>
                 </div>
               </div>
@@ -98,9 +110,9 @@ export function ComplianceScan() {
               <Loader2 className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-6" />
               <h2 className="text-2xl font-bold mb-4">Scanning in Progress...</h2>
               <p className="text-gray-600 mb-6">
-                Checking compliance rules against employee records
+                Checking AML rules against IBM transaction records
               </p>
-              
+
               <div className="space-y-2 mb-6">
                 <Progress value={scanProgress} className="h-3" />
                 <p className="text-sm text-gray-500">{scanProgress}% complete</p>
@@ -108,16 +120,16 @@ export function ComplianceScan() {
 
               <div className="space-y-2 text-sm text-left bg-gray-50 rounded-lg p-4">
                 <p className="text-green-600 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" /> Validating password policies...
+                  <CheckCircle className="w-4 h-4" /> Checking large transactions (&gt;$10,000 CTR)...
                 </p>
                 <p className="text-green-600 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" /> Checking account activity...
+                  <CheckCircle className="w-4 h-4" /> Detecting structuring patterns...
                 </p>
                 <p className="text-green-600 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" /> Verifying access controls...
+                  <CheckCircle className="w-4 h-4" /> Scanning for currency mixing...
                 </p>
                 <p className="text-blue-600 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Analyzing results...
+                  <Loader2 className="w-4 h-4 animate-spin" /> Flagging confirmed laundering (Is Laundering = 1)...
                 </p>
               </div>
             </div>
@@ -146,7 +158,7 @@ export function ComplianceScan() {
 
             <Card className="p-6">
               <h2 className="text-xl font-semibold mb-4">Violation Summary</h2>
-              
+
               <div className="grid md:grid-cols-4 gap-4 mb-6">
                 <div className="text-center p-4 bg-red-50 rounded-lg">
                   <p className="text-3xl font-bold text-red-600">
@@ -177,18 +189,18 @@ export function ComplianceScan() {
               <h3 className="font-semibold mb-4">Detected Violations</h3>
               <div className="space-y-3">
                 {violations.map((violation) => {
-                  const rule = getRuleById(violation.ruleId);
+                  const rule = extractedRules.find(r => r.id === violation.rule_id);
                   return (
                     <Card key={violation.id} className="p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <Badge className={severityColors[violation.severity]}>
+                            <Badge className={(severityColors as any)[violation.severity]}>
                               {violation.severity.toUpperCase()}
                             </Badge>
-                            <span className="text-sm text-gray-600">Record: {violation.recordId}</span>
+                            <span className="text-sm text-gray-600">TXN: {violation.transaction_id}</span>
                           </div>
-                          <h4 className="font-semibold text-gray-900 mb-1">{violation.ruleName}</h4>
+                          <h4 className="font-semibold text-gray-900 mb-1">{violation.rule_name}</h4>
                         </div>
                       </div>
 
