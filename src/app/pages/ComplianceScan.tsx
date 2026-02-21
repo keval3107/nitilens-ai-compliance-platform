@@ -5,20 +5,40 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
-import { extractedRules } from '../data/mockData';
 import { api } from '../services/api';
 
-type ScanStatus = 'ready' | 'scanning' | 'complete';
+type ScanStatus = 'ready' | 'scanning' | 'complete' | 'error';
 
 export function ComplianceScan() {
   const navigate = useNavigate();
   const [scanStatus, setScanStatus] = useState<ScanStatus>('ready');
   const [scanProgress, setScanProgress] = useState(0);
   const [violations, setViolations] = useState<any[]>([]);
+  const [datasetStats, setDatasetStats] = useState<any>(null);
+  const [activeRules, setActiveRules] = useState(0);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    // Fetch dataset stats and active rules count on mount
+    const fetchInitialData = async () => {
+      try {
+        const [stats, summary] = await Promise.all([
+          api.getAMLStats(),
+          api.getComplianceSummary()
+        ]);
+        setDatasetStats(stats);
+        setActiveRules(summary.active_rules);
+      } catch (error) {
+        console.error('Failed to fetch initial data:', error);
+      }
+    };
+    fetchInitialData();
+  }, []);
 
   const handleStartScan = async () => {
     setScanStatus('scanning');
     setScanProgress(10);
+    setErrorMessage('');
 
     try {
       // Simulate progress for UI feel
@@ -27,7 +47,7 @@ export function ComplianceScan() {
       }, 300);
 
       // Trigger real backend scan
-      await api.triggerScan();
+      const scanResult = await api.triggerScan();
 
       // Fetch results
       const results = await api.listViolations('open');
@@ -37,12 +57,12 @@ export function ComplianceScan() {
 
       setTimeout(() => {
         setScanStatus('complete');
-        setViolations(results.violations);
+        setViolations(results.violations || []);
       }, 500);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Scan failed:', error);
-      setScanStatus('ready');
-      alert('Compliance scan failed. Please ensure the backend is running at localhost:8000.');
+      setScanStatus('error');
+      setErrorMessage(error.message || 'Compliance scan failed. Please ensure the backend is running at localhost:8000.');
     }
   };
 
@@ -53,9 +73,8 @@ export function ComplianceScan() {
     low: 'bg-green-100 text-green-700 border-green-300'
   };
 
-  const getRuleById = (ruleId: string) => {
-    return extractedRules.find(r => r.id === ruleId);
-  };
+  const totalTransactions = datasetStats?.total_transactions || 0;
+  const estimatedTime = totalTransactions > 0 ? Math.ceil(totalTransactions / 100) : 20;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -67,6 +86,21 @@ export function ComplianceScan() {
           </p>
         </div>
 
+        {scanStatus === 'error' && (
+          <Card className="p-6 bg-red-50 border-red-200 mb-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0" />
+              <div>
+                <h3 className="font-semibold text-red-900 mb-1">Scan Failed</h3>
+                <p className="text-sm text-red-800">{errorMessage}</p>
+                <Button onClick={() => setScanStatus('ready')} variant="outline" className="mt-4">
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {scanStatus === 'ready' && (
           <Card className="p-8">
             <div className="text-center max-w-2xl mx-auto">
@@ -75,23 +109,23 @@ export function ComplianceScan() {
               </div>
               <h2 className="text-2xl font-bold mb-4">Ready to Scan</h2>
               <p className="text-gray-600 mb-6">
-                NitiLens will check {extractedRules.length} AML compliance rules against the IBM AML transaction records.
-                This process typically takes 30-60 seconds.
+                NitiLens will check {activeRules} AML compliance rules against the IBM AML transaction records.
+                This process typically takes {estimatedTime}-{estimatedTime + 10} seconds.
               </p>
 
               <div className="bg-gray-50 rounded-lg p-4 mb-8">
                 <div className="grid md:grid-cols-3 gap-4 text-sm">
                   <div>
                     <p className="text-gray-600 mb-1">Records to Scan</p>
-                    <p className="text-2xl font-bold text-gray-900">51</p>
+                    <p className="text-2xl font-bold text-gray-900">{totalTransactions.toLocaleString()}</p>
                   </div>
                   <div>
                     <p className="text-gray-600 mb-1">AML Rules Active</p>
-                    <p className="text-2xl font-bold text-gray-900">{extractedRules.length}</p>
+                    <p className="text-2xl font-bold text-gray-900">{activeRules}</p>
                   </div>
                   <div>
                     <p className="text-gray-600 mb-1">Estimated Time</p>
-                    <p className="text-2xl font-bold text-gray-900">~20s</p>
+                    <p className="text-2xl font-bold text-gray-900">~{estimatedTime}s</p>
                   </div>
                 </div>
               </div>
@@ -188,47 +222,47 @@ export function ComplianceScan() {
 
               <h3 className="font-semibold mb-4">Detected Violations</h3>
               <div className="space-y-3">
-                {violations.map((violation) => {
-                  const rule = extractedRules.find(r => r.id === violation.rule_id);
-                  return (
-                    <Card key={violation.id} className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge className={(severityColors as any)[violation.severity]}>
-                              {violation.severity.toUpperCase()}
-                            </Badge>
-                            <span className="text-sm text-gray-600">TXN: {violation.transaction_id}</span>
+                {violations.slice(0, 10).map((violation) => (
+                  <Card key={violation.id} className="p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge className={(severityColors as any)[violation.severity]}>
+                            {violation.severity.toUpperCase()}
+                          </Badge>
+                          <span className="text-sm text-gray-600">TXN: {violation.transaction_id}</span>
+                        </div>
+                        <h4 className="font-semibold text-gray-900 mb-1">{violation.rule_name}</h4>
+                      </div>
+                    </div>
+
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                      <p className="text-sm text-gray-900">{violation.explanation}</p>
+                    </div>
+
+                    <div className="bg-gray-50 rounded p-3 mb-2">
+                      <p className="text-xs font-medium text-gray-700 mb-2">Evidence:</p>
+                      <div className="grid md:grid-cols-2 gap-2 text-xs">
+                        {Object.entries(violation.evidence).slice(0, 6).map(([key, value]) => (
+                          <div key={key}>
+                            <span className="text-gray-600">{key}:</span>{' '}
+                            <span className="font-mono text-gray-900">{String(value)}</span>
                           </div>
-                          <h4 className="font-semibold text-gray-900 mb-1">{violation.rule_name}</h4>
-                        </div>
+                        ))}
                       </div>
+                    </div>
 
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
-                        <p className="text-sm text-gray-900">{violation.explanation}</p>
-                      </div>
-
-                      <div className="bg-gray-50 rounded p-3 mb-2">
-                        <p className="text-xs font-medium text-gray-700 mb-2">Evidence:</p>
-                        <div className="grid md:grid-cols-2 gap-2 text-xs">
-                          {Object.entries(violation.evidence).map(([key, value]) => (
-                            <div key={key}>
-                              <span className="text-gray-600">{key}:</span>{' '}
-                              <span className="font-mono text-gray-900">{String(value)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {rule && (
-                        <p className="text-xs text-gray-500">
-                          <FileText className="w-3 h-3 inline mr-1" />
-                          Source: {rule.sourceReference}
-                        </p>
-                      )}
-                    </Card>
-                  );
-                })}
+                    <p className="text-xs text-gray-500">
+                      <FileText className="w-3 h-3 inline mr-1" />
+                      Rule ID: {violation.rule_id}
+                    </p>
+                  </Card>
+                ))}
+                {violations.length > 10 && (
+                  <p className="text-sm text-gray-600 text-center py-4">
+                    Showing 10 of {violations.length} violations. View all in Review Queue.
+                  </p>
+                )}
               </div>
 
               <div className="mt-6 flex justify-end pt-6 border-t">

@@ -22,14 +22,49 @@ export interface AMLStats {
 }
 
 export interface ComplianceSummary {
-    total_transactions_scanned: number;
+    total_transactions: number;
+    total_scanned: number;
     total_violations: number;
     open_violations: number;
     resolved_violations: number;
+    reviewed_violations: number;
     false_positives: number;
-    compliance_rate: number;
-    severity_breakdown: Record<string, number>;
+    compliance_rate: number | null;
+    active_rules: number;
+    severity_breakdown: {
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+    };
+    most_violated_rules: Array<{
+        rule_id: string;
+        rule_name: string;
+        violation_count: number;
+    }>;
+    trend_data: Array<{
+        date: string;
+        violations: number;
+        compliance_rate: number;
+    }>;
+    last_scan_time: string | null;
+    dataset_connected: boolean;
     dataset_laundering_rate: number;
+}
+
+export interface ActivityItem {
+    type: 'violation_detected' | 'violation_reviewed';
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    transaction_id: string;
+    rule_name: string;
+    timestamp: string;
+    status: string;
+    comment?: string;
+}
+
+export interface ActivityResponse {
+    total: number;
+    items: ActivityItem[];
 }
 
 export const api = {
@@ -58,6 +93,13 @@ export const api = {
 
     async getComplianceSummary(): Promise<ComplianceSummary> {
         const res = await fetch(`${API_BASE}/compliance/summary`);
+        if (!res.ok) throw new Error('Failed to fetch compliance summary');
+        return res.json();
+    },
+
+    async getComplianceActivity(limit = 10): Promise<ActivityResponse> {
+        const res = await fetch(`${API_BASE}/compliance/activity?limit=${limit}`);
+        if (!res.ok) throw new Error('Failed to fetch compliance activity');
         return res.json();
     },
 
