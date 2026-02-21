@@ -12,8 +12,8 @@ from typing import List, Tuple
 from app.models.violation import Violation
 from app.core.rule_engine import get_rules
 
-_BASE = Path(__file__).parent.parent.parent.parent  # project root inside backend/
-DATA_FILE = _BASE.parent / "data" / "datasets" / "ibm_aml" / "sample_transactions.csv"
+_BASE = Path(__file__).parent.parent.parent.parent  # project root
+DATA_FILE = _BASE / "data" / "datasets" / "ibm_aml" / "sample_transactions.csv"
 VIOLATIONS_FILE = Path(__file__).parent.parent / "storage" / "violations.json"
 
 
